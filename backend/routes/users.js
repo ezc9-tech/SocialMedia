@@ -3,6 +3,10 @@ import { check, validationResult } from 'express-validator';
 import User from '../models/User.js';
 import gravatar from 'gravatar';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const userRouter = express.Router();
 
@@ -14,10 +18,9 @@ userRouter.post(
   [
     check('name', 'Name is required').not().isEmpty(),
     check('email', 'Please include a valid email').isEmail(),
-    check(
-      'password',
-      'Please enter a password with six or more characters',
-    ).isLength({ min: 6 }),
+    check('password', 'Password must be 6 or more characters').isLength({
+      min: 6,
+    }),
   ],
   async (req, res) => {
     // Validate input
@@ -38,11 +41,7 @@ userRouter.post(
       }
 
       // Get user's gravatar
-      const avatar = gravatar.url(email, {
-        s: '200',
-        r: 'pg',
-        d: 'mm',
-      });
+      const avatar = gravatar.url(email, { s: '200', r: 'pg', d: 'mm' });
 
       // Create new user instance
       user = new User({ name, email, avatar, password });
@@ -54,8 +53,16 @@ userRouter.post(
       // Save user to database
       await user.save();
 
-      // Return success message (or you could return a JWT here)
-      res.status(201).send('User Registered');
+      // Create JWT payload
+      const payload = { user: { id: user.id } };
+
+      // Sign JWT asynchronously
+      const token = await jwt.sign(payload, process.env.JWT_SECRET, {
+        expiresIn: 360000,
+      });
+
+      // Return token to client
+      res.status(201).json({ token });
     } catch (error) {
       console.error(error.message);
       res.status(500).send('Server error');
